@@ -26,13 +26,55 @@ def pos_sat_sp3(sp3, const, prn, mjd, ordre):
     """ Calcul de la postion du satellite "const/prn"
     à un instant donné mjd """
     X_ECEF, Y_ECEF, ZECEF, dte = 0,0,0,0
-
-    """ A COMPLETER (TP5) """
+    
     (orb,nl) = sp3.getSp3(const,prn)
-    print(orb[0:3,:])
-    print(orb.shape)
+    orb[:,1:4] *=1000
+    orb[:,4] /= 1e6
+    
+    #trouver ti
+    id=0
+    for i in range(nl):
+        if orb[i, 0] >= mjd: 
+            id = i-1
+            break
 
-    return X_ECEF, Y_ECEF, ZECEF, dte
+    #extrait des m dates
+    mp1s2 = int((ordre+1)/2)
+    
+
+    #effet de bords 
+    if id + mp1s2 -1 > len(orb):
+        pos = orb[-10:, 1:]
+        t_list = orb[-10:, 0]
+    elif id - mp1s2 < 0:
+        pos = orb[:10, 1:]
+        t_list = orb[:10, 0]
+    else:
+        t_list = orb[id - mp1s2 : id + mp1s2, 0]
+        pos = orb[id - mp1s2 : id + mp1s2, 1:]
+    
+    
+    #interpolation 
+    Pos = Pol_Lagrange(ordre, mjd, t_list, pos)
+
+    X_ECEF, Y_ECEF, Z_ECEF, dte = Pos[0], Pos[1], Pos[2], Pos[3]
+
+    return X_ECEF, Y_ECEF, Z_ECEF, dte
+
+def Lagrange(j, m, t_list, t):
+    Lj=1
+    for k in range(m):
+        if  k!= j:
+            Lj *= ((t-t_list[k]) / (t_list[j] - t_list[k]))
+    return Lj
+
+def Pol_Lagrange(m, t, t_list, Y):
+    y=0
+    for i in range(m):
+        y += Lagrange(i, m, t_list, t) * Y[i, :]
+    return y
+
+
 
 if __name__ == "__main__":
 
@@ -66,6 +108,11 @@ if __name__ == "__main__":
     """ Fonction developpee lors du TP """
     X,Y,Z,dte = pos_sat_sp3(mysp3, constellation, prn, t.mjd, ordre)
     print("\nFonction developpee lors du TP\nX = %13.3f m\nY = %13.3f m\nZ = %13.3f m\ndte = %.9f s" % (X,Y,Z,dte))
+    
+    (X1,Y1,Z1,dte1)	= pos_sat_sp3(mysp3, constellation,prn,t.mjd-0.001/86400,ordre)
+    (X2,Y2,Z2,dte2)	= pos_sat_sp3(mysp3, constellation,prn,t.mjd+0.001/86400,ordre)
+    V = np.array([[X2-X1],[Y2-Y1],[Z2-Z1]]) / 0.002
+    print("V = %.3f m/s" % np.linalg.norm(V))
 
     toc = gpst.gpsdatetime()
     print ('%.3f sec elapsed ' % (toc-tic))
