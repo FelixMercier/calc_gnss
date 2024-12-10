@@ -70,7 +70,7 @@ def Lagrange(j, m, t_list, t):
 
 def Pol_Lagrange(m, t, t_list, Y):
     y=0
-    for i in range(m):
+    for i in range(m):  
         y += Lagrange(i, m, t_list, t) * Y[i, :]
     return y
 
