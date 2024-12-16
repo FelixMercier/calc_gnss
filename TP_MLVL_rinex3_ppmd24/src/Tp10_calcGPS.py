@@ -13,6 +13,8 @@ import numpy as np
 import copy
 import os
 import gpsdatetime as gpst
+import Tp5_Orbits_Gnss_Sp3 as tp5
+import Tp3_Orbits_Gps_Gal_Nav as tp3
 
 
 #sys.path.append('../TD07_trilat_GPS')
@@ -47,7 +49,7 @@ class gnss_process_TP():
         self.cut_off=3*const.d2r
         self.X0 = np.zeros((3,1))
         self.iono = 'none'
-        self.nav = 'sp3'
+        self.nav = 'brdc'
         self.const= 'GRE'
         self.type="o"
         self.constraint=0 # contraintes sur la position, utilisé pour solution DGNSS
@@ -70,6 +72,9 @@ class gnss_process_TP():
         self.nb_sat=len(epoch.satellites)
 
         c = 299792458.0
+        mu = 3.986005e14
+        F = -4.442807633e-10
+        T = 23.934 * 3600
 
 #        print(epoch.satellites[0].__dict__.keys())
 
@@ -104,15 +109,64 @@ class gnss_process_TP():
             S.tr = epoch.tgps.mjd
 
             """ Calcul du temps de vol et de la date d'émission """
+            S.tv = S.PR / c            #en sec
+            S.tv = (S.tv / 86400)      #en jour
+            S.te = S.tr - S.tv         #en jour 
+            
 
-            """ Correction de la derive d'horloge du satellite """
+            if self.nav == 'brdc':
+                """ Correction de la derive d'horloge du satellite """
+                S.dte = Eph.alpha0 + Eph.alpha1 * ((S.te - Eph.TOC)*86400) + Eph.alpha2*((S.te-Eph.TOC)*86400)**2
 
-            """ Calcul de l'effet relativiste """
+                S.te -= S.dte/86400
+                S.PR += c*S.dte
+                """ Calcul de l'effet relativiste """
+                t_eph = gpst.gpsdatetime(mjd=Eph.mjd)
+                t = gpst.gpsdatetime(mjd=mjd)
+                
+                delta_t = t - t_eph
+                
+                n = np.sqrt(mu / (Eph.sqrt_a**6) ) + Eph.delta_n
 
+                M = Eph.M0 + n*delta_t
+                
+                E0=Eph.M0
+                E = E0+1
+                R = 30e6
+                
+                while np.abs(R*E - R*E0) > 1e-3:
+                    E0 = E
+                    E = M + Eph.e * np.sin(E0)
+                S.dtrelat = F * Eph.e * Eph.sqrt_a * np.sin(E)
+                print('dt_relat = ', S.dtrelat)
+                
+                S.te -= S.dtrelat/86400
+                S.PR + c*S.dtrelat
+
+            if self.nav == 'sp3':
+                """ Correction de la derive d'horloge du satellite """
+                S.X, S.Y, S.Z, S.dte = tp5.pos_sat_sp3(brdc, S.const, S.PRN, S.te, 9)
+                
+                S.te -= S.dte
+                S.PR += c*S.dte
+                
+                """ Calcul de l'effet relativiste """                
+                (X1,Y1,Z1,dte1)	= tp5.pos_sat_sp3(brdc, S.const,S.PRN,S.te.mjd-0.001/86400, 9)
+                (X2,Y2,Z2,dte2)	= tp5.pos_sat_sp3(brdc, S.const,S.PRN,S.te.mjd+0.001/86400, 9)
+                V = np.array([[X2-X1],[Y2-Y1],[Z2-Z1]]) / 0.002
+                
+                S.dtrelat = -2 * (S.X * V[0,0] + S.Y * V[1,0] + S.Z*V[2,0]) / (c**2)
+                
+                S.te -= S.dtrelat/86400
+                S.PR += c*S.dtrelat
             """ Calcul de la position des satellites a te """
-
+            S.X, S.Y, S.Z, S.dte = tp3.tp3_pos_sat_brdc(brdc, Eph.const, Eph.PRN, S.te)
+            print(S.X, S.Y, S.Z, S.PR)
+            
             """ Et pourtant elle tourne """
-
+            S.tv = S.tr - S.te
+            print("tv ============", S.tv)
+            alpha = 2*np.pi * S.tv/T
             """ Sauvegarde des donnees """
             Prcorr = 0
             Xs = 0

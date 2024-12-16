@@ -22,22 +22,22 @@ def tp3_pos_sat_brdc(orb, const, prn, mjd):
     à un instant donné mjd """
     X_ECEF, Y_ECEF, Z_ECEF, dte = 0,0,0,0
     
-    
+    mu = 3.986005e14
     
     Eph = orb.getEphemeris(const,prn,mjd)
-    print("TOE : ", Eph.mjd)
+    # print("TOE : ", Eph.TOE)
     
     t_eph = gpst.gpsdatetime(mjd=Eph.mjd)
     t = gpst.gpsdatetime(mjd=mjd)
     
     delta_t = t - t_eph
-    print()
+    # print()
     
     n = np.sqrt(mu / (Eph.sqrt_a**6) ) + Eph.delta_n
-    print("n = ", n)
+    # print("n = ", n)
 
     M = Eph.M0 + n*delta_t
-    print("M = ", M)
+    # print("M = ", M)
     
     E0=Eph.M0
     E = E0+1
@@ -46,25 +46,25 @@ def tp3_pos_sat_brdc(orb, const, prn, mjd):
     while np.abs(R*E - R*E0) > 1e-3:
         E0 = E
         E = M + Eph.e * np.sin(E0)
-    print("E = ", E)
+    # print("E = ", E)
     
     v = 2*np.arctan(np.sqrt((1 + Eph.e)/(1 - Eph.e)) * np.tan(E/2))
-    print("v = ", v)
+    # print("v = ", v)
     
     r = (Eph.sqrt_a**2)*(1 - Eph.e * np.cos(E))
-    print("r = ", r)
+    # print("r = ", r)
     
     phi = Eph.omega + v
     dphi = Eph.cus*np.sin(2*phi) + Eph.cuc*np.cos(2*phi)
-    print("dphi = " , dphi)
+    # print("dphi = " , dphi)
     
     dr = Eph.crs*np.sin(2*phi) + Eph.crc*np.cos(2*phi)
-    print("dr = ", dr)
+    # print("dr = ", dr)
     
     x = (r + dr) * np.cos(phi + dphi)
     y = (r + dr) * np.sin(phi + dphi)
-    print("x = ", x)
-    print("y = ", y)
+    # print("x = ", x)
+    # print("y = ", y)
     
     di = Eph.cis*np.sin(2*phi) + Eph.cic*np.cos(2*phi)
     
@@ -79,9 +79,9 @@ def tp3_pos_sat_brdc(orb, const, prn, mjd):
                          [0, np.sin(i), np.cos(i)]])
     POS = matRotOm @ matRoti @ np.array([[x], [y], [0]])
     X, Y, Z = POS[0, 0], POS[1, 0], POS[2, 0]
-    print("X = ", X)
-    print("Y = ", Y)
-    print("Z = ", Z)
+    # print("X = ", X)
+    # print("Y = ", Y)
+    # print("Z = ", Z)
     
     Om_dot_e = -7.2921151467e-5
     wk_sec = t.wsec
@@ -101,8 +101,8 @@ def tp3_pos_sat_brdc(orb, const, prn, mjd):
     
     X_ECEF, Y_ECEF, Z_ECEF = POS_ECEF[0, 0], POS_ECEF[1, 0], POS_ECEF[2, 0]
     
-    print("demi-grand axe a=%.3fm" % (Eph.sqrt_a**2))
-    print(Eph.mjd, mjd)
+    # print("demi-grand axe a=%.3fm" % (Eph.sqrt_a**2))
+    # print(Eph.mjd, mjd)
 
     return X_ECEF, Y_ECEF, Z_ECEF, dte
 
