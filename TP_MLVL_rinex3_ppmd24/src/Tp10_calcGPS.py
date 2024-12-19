@@ -15,7 +15,8 @@ import os
 import gpsdatetime as gpst
 import Tp5_Orbits_Gnss_Sp3 as tp5
 import Tp3_Orbits_Gps_Gal_Nav as tp3
-
+import TP7clem as tp7
+# import Tp7_Trilat as tp7
 
 #sys.path.append('../TD07_trilat_GPS')
 #import Tp7_Trilat as TP7
@@ -74,7 +75,7 @@ class gnss_process_TP():
         c = 299792458.0
         mu = 3.986005e14
         F = -4.442807633e-10
-        T = 23.934 * 3600
+        T = 23.934 * 3600  #jour sidéral en secondes
 
 #        print(epoch.satellites[0].__dict__.keys())
 
@@ -120,8 +121,8 @@ class gnss_process_TP():
 
                 S.te -= S.dte/86400
                 S.PR += c*S.dte
-                """ Calcul de l'effet relativiste """
-                t_eph = gpst.gpsdatetime(mjd=Eph.mjd)
+                """ Calcul de l'effet relativiste"""
+                t_eph = gpst.gpsdatetime(mjd=S.te)
                 t = gpst.gpsdatetime(mjd=mjd)
                 
                 delta_t = t - t_eph
@@ -130,7 +131,7 @@ class gnss_process_TP():
 
                 M = Eph.M0 + n*delta_t
                 
-                E0=Eph.M0
+                E0=M
                 E = E0+1
                 R = 30e6
                 
@@ -138,10 +139,9 @@ class gnss_process_TP():
                     E0 = E
                     E = M + Eph.e * np.sin(E0)
                 S.dtrelat = F * Eph.e * Eph.sqrt_a * np.sin(E)
-                print('dt_relat = ', S.dtrelat)
                 
                 S.te -= S.dtrelat/86400
-                S.PR + c*S.dtrelat
+                S.PR += c*S.dtrelat
 
             if self.nav == 'sp3':
                 """ Correction de la derive d'horloge du satellite """
@@ -157,28 +157,46 @@ class gnss_process_TP():
                 
                 S.dtrelat = -2 * (S.X * V[0,0] + S.Y * V[1,0] + S.Z*V[2,0]) / (c**2)
                 
+                
                 S.te -= S.dtrelat/86400
                 S.PR += c*S.dtrelat
+                
+                
             """ Calcul de la position des satellites a te """
-            S.X, S.Y, S.Z, S.dte = tp3.tp3_pos_sat_brdc(brdc, Eph.const, Eph.PRN, S.te)
-            print(S.X, S.Y, S.Z, S.PR)
+            S.X, S.Y, S.Z, dte = tp3.tp3_pos_sat_brdc(brdc, Eph.const, Eph.PRN, S.te)
+          
+
             
             """ Et pourtant elle tourne """
-            S.tv = S.tr - S.te
-            print("tv ============", S.tv)
-            alpha = 2*np.pi * S.tv/T
+            S.tv = (S.tr - S.te) * 86400
+            
+            alpha = (2*np.pi * S.tv/T)
+            
+            S.X, S.Y, S.Z = tool.toolRotZ(S.X, S.Y, S.Z, -alpha)
+            
+            print("PosSat", S.X, S.Y, S.Z)
+            
             """ Sauvegarde des donnees """
-            Prcorr = 0
-            Xs = 0
-            Ys = 0
-            Zs = 0
+            Prcorr = S.PR
+            Xs = S.X
+            Ys = S.Y
+            Zs = S.Z
             Dobs.append(Prcorr)
             PosSat.append([Xs,Ys,Zs])
 
-        Dobs = np.array(Dobs)
+        Dobs = np.array(Dobs).reshape(-1, 1)
         PosSat = np.array(PosSat)
+        # print("PosSat = ", PosSat)
+        print("Dobs = ", Dobs)
+        X0 = np.zeros((4, 1))
         
-        return
+        X,Y,Z,cdtr,sigma0_2,V,SigmaX = tp7.estimation(PosSat, Dobs, X0, err=1)
+        # X,Y,Z,cdtr,sigma0_2,V, iter = tp7.estimation(PosSat, Dobs, X0)
+        print(X, Y, Z, cdtr)
+        print("écarts : ", X - 4201603.471, Y - 189865.522, Z - 4779084.965, cdtr -28.453 )
+        
+        
+        return X, Y, Z
 
 
 def main():
@@ -243,6 +261,8 @@ def main():
     spp1.X0[1]=rnx.headers[0].Y
     spp1.X0[2]=rnx.headers[0].Z
     spp1.spp(Ep,Orb)
+    print()
+    
 
 if __name__ == '__main__':
 

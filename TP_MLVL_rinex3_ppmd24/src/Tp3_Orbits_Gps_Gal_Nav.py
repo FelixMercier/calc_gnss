@@ -39,7 +39,7 @@ def tp3_pos_sat_brdc(orb, const, prn, mjd):
     M = Eph.M0 + n*delta_t
     # print("M = ", M)
     
-    E0=Eph.M0
+    E0=M
     E = E0+1
     R = 30e6
     

@@ -51,16 +51,20 @@ def estimation(PosSat,Dobs,X0):
     """ Calcul d'une trilatération simple avec un offset
     correspondant à l'erreur d'horloge du récepteur """
     sigma0_2 = 1
+    sigma0_2_new = 0
     Xchap = np.zeros((4, 1))
     
     nitermax = 20
     iter = 0
-    while sigma0_2 > 1e-6:
+    while np.abs(sigma0_2 - sigma0_2_new) > 1e-6:
         iter += 1
+
         
-        X0 += Xchap
+        Xchap  += Xchap
+
         alpha = Alpha(X0, PosSat).reshape(-1, 1)
         B = Dobs - alpha - X0[-1]
+
         
         jx = X0[0] - PosSat[:, 0].reshape(-1, 1)
         jx = jx * 1/alpha
@@ -72,26 +76,26 @@ def estimation(PosSat,Dobs,X0):
         A = np.hstack((jx, jy, jz, jdt))
 
         sig = 2
-        sigmaB = sig * np.eye(len(Dobs))
+        sigmaB = (sig**2) * np.eye(len(Dobs))
         P = np.linalg.inv(sigmaB)
         
         N = A.T@P@A
+ 
         K = A.T@P@B
         Xchap = np.linalg.inv(N) @ K
-
         
         V = B - A@Xchap
-        
-        sigma0_2 = (V.T @ P @ V) / (len(Dobs) - len(Xchap))
+        sigma0_2 = sigma0_2_new
+        sigma0_2_new = ((V.T @ P @ V) / (len(Dobs) - len(Xchap)))[0, 0]
         
         
         if iter > nitermax: break
 
     X0 += Xchap
     X, Y, Z, cdtr = X0[0], X0[1], X0[2], X0[3]
-
+    print("résidus", V)
     
-    return X,Y,Z,cdtr,sigma0_2,V
+    return X,Y,Z,cdtr,sigma0_2,V, iter
 
 
 if __name__ == "__main__":
@@ -103,6 +107,7 @@ if __name__ == "__main__":
     Dobs = Dobs.reshape(-1, 1)
     X0 = X0.reshape(-1, 1)
     X0 = X0.astype('float64')
+
 #    PosSat = np.genfromtxt("possat.txt",skip_header=1,delimiter=",")
 #    Dobs = np.genfromtxt("dobs.txt",skip_header=1,delimiter=",")
 #    
@@ -116,15 +121,15 @@ if __name__ == "__main__":
 #        s = json.dumps({"Sat": L}, indent=4)
 #        f.write(s)
 
-#
     X,Y,Z,cdtr,sigma0_2,V,SigmaX = proc.trilatGps(PosSat,Dobs,X0)
     print("\nSolution pygnssToolbox\nX = %13.3f m\nY = %13.3f m\nZ = %13.3f m\nc*dtr = %.9f m" % (X,Y,Z,cdtr))
     print("sigma0_2 = ", sigma0_2,"\nV = ", V)
     print("SigmaX", SigmaX)
 
-    X,Y,Z,cdtr,sigma0_2,V = estimation(PosSat,Dobs,X0)
+    X,Y,Z,cdtr,sigma0_2,V, iter = estimation(PosSat,Dobs,X0)
     print("\nSolution TP\nX = %13.3f m\nY = %13.3f m\nZ = %13.3f m\nc*dtr = %.9f m" % (X,Y,Z,cdtr))
     print("sigma0_2 = %.3f" % (sigma0_2))
+    print(f"en {iter} itérations")
     # print("V = ",V,"\nSigmaX = ",SigmaX)
 
     toc = gpst.gpsdatetime()
